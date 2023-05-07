@@ -3,7 +3,9 @@ const express = require("express")
 const ejs = require("ejs")
 const bodyParser = require("body-parser")
 const mongoose = require("mongoose")
-const md5 = require("md5")
+const bcrypt = require("bcrypt")
+const saltRounds = 10
+// const md5 = require("md5")
 // const encrypt = require("mongoose-encryption")
 
 const app = express()
@@ -26,8 +28,6 @@ const userSchema = new mongoose.Schema({
 //userSchema.plugin(encrypt, { secret: process.env.SECRET, encryptedFields: ["password"] }) //encrypts the password field in the database
 /////////////////////Encryption Ends //////////////////////////////
 
-//////////////////////Hashing////////////////////////
-
 const User = new mongoose.model("User", userSchema)
 
 app.get("/", (req, res) => {
@@ -41,37 +41,45 @@ app.get("/login", (req, res) => {
 })
 
 app.post("/register", (req, res) => {
-	const newUser = new User({
-		email: req.body.username,
-		password: md5(req.body.password)
+	bcrypt.hash(req.body.password, saltRounds, (err, hash) => {
+		if (!err) {
+			const newUser = new User({
+				email: req.body.username,
+				password: hash
+			})
+			newUser
+				.save()
+				.then((result) => {
+					if (result.email && result.password) {
+						res.render("secrets")
+					} else {
+						res.send("A problem occured.")
+					}
+				})
+				.catch((err) => {
+					res.send(err)
+				})
+		} else {
+			console.log(err)
+		}
 	})
-	newUser
-		.save()
-		.then((result) => {
-			if (result.email && result.password) {
-				res.render("secrets")
-			} else {
-				res.send("A problem occured.")
-			}
-		})
-		.catch((err) => {
-			res.send(err)
-		})
 })
 
 app.post("/login", (req, res) => {
 	let userName = req.body.username
-	let passWord = md5(req.body.password)
+	let passWord = req.body.password
 
 	User.findOne({ email: userName })
 		.then((foundUser) => {
 			if (foundUser) {
-				if (foundUser.password === passWord) {
-					res.render("secrets")
-				} else {
-					console.log("User not found.")
-					res.send("User not Found!!")
-				}
+				bcrypt.compare(passWord, foundUser.password, (err, result) => {
+					if (result == true) {
+						res.render("secrets")
+					} else {
+						console.log("User not found.")
+						res.send("User not Found!!")
+					}
+				})
 			}
 		})
 		.catch((err) => {
